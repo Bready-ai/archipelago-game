@@ -268,4 +268,4 @@ function frame(now){if(boot.failed)return;requestAnimationFrame(frame);const raw
 }
 requestAnimationFrame(frame);
 // Read-only observability for QA; gameplay remains driven by regular mouse/keyboard events.
-window.__combatSnapshot=()=>({mode:game.mode,player:{...game.player},robot:{...game.robot},hits:game.hits,misses:game.misses,elapsed:game.elapsed,mobile:{touchMode,movement:{...mobile.movement},attackHeld:mobile.attackHeld},quality:{pixelRatio:renderer.getPixelRatio(),shadows:renderer.shadowMap.enabled},drawCalls:renderer.info.render.calls});
+window.__combatSnapshot=()=>({mode:game.mode,player:{...game.player},robot:{...game.robot},hits:game.hits,misses:game.misses,dodges:game.dodges,elapsed:game.elapsed,mobile:{touchMode,movement:{...mobile.movement},attackHeld:mobile.attackHeld},quality:{pixelRatio:renderer.getPixelRatio(),shadows:renderer.shadowMap.enabled},drawCalls:renderer.info.render.calls});

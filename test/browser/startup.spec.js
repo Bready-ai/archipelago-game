@@ -27,8 +27,11 @@ test('production scene renders WebGL 2 and handles three simultaneous touches',a
   const before=(await snapshot()).player;
   await send('touchStart',[move]);await send('touchStart',[move,attack]);
   await expect.poll(async()=>{const s=await snapshot();return s.mobile.attackHeld&&s.mobile.movement.x>.1&&Math.hypot(s.player.x-before.x,s.player.z-before.z)>.1;}).toBe(true);
+  // The committed windup cannot be cancelled; press during the allowed recovery window.
+  await page.waitForFunction(()=>{const p=window.__combatSnapshot().player;return p.state==='attack'&&p.t>=.30&&p.t<=.45;});
+  const dodgesBefore=(await snapshot()).dodges;
   await send('touchStart',[move,attack,dodge]);
-  await expect.poll(async()=>(await snapshot()).player.cd).toBeGreaterThan(0);
+  await expect.poll(async()=>(await snapshot()).dodges).toBeGreaterThan(dodgesBefore);
   await send('touchCancel',[]);
   await expect.poll(async()=>{const s=await snapshot();return !s.mobile.attackHeld&&s.mobile.movement.x===0;}).toBe(true);
   await page.setViewportSize({width:390,height:844});
