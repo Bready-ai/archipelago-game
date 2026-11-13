@@ -1,8 +1,11 @@
 import * as THREE from 'three';
-import { Combat, C, dist } from './combat.js';
+import { Combat, C, dist, wrap, sectorHits } from './combat.js';
 import { createMobileControls, assistedAim } from './mobile-controls.js';
 import { chooseQuality, renderRatio } from './quality.js';
 import { createGameRenderer } from './renderer.js';
+import { createActors,GROUND_Y } from './actors.js';
+import { ActorAnimator } from './animation.js';
+import { ContactEffects } from './contact-effects.js';
 import '@fontsource-variable/manrope';
 import '@fontsource/russo-one/cyrillic-400.css';
 import '@fontsource/russo-one/latin-400.css';
@@ -121,59 +124,78 @@ for(const objects of staticBatches.values()){
 scene.remove(yard);
 function contact(radius,color,opacity){const m=new THREE.Mesh(new THREE.CircleGeometry(radius,40),new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false}));m.rotation.x=-Math.PI/2;m.position.y=.105;scene.add(m);return m;}
 const pShadow=contact(.56,'#142e25',.27),rShadow=contact(1.15,'#142e25',.3);
-// Fox: angular ears, cream muzzle and tail make the animal readable at gameplay scale.
-const fox=group();const foxBody=group(fox);
-box(M.coat,foxBody,0,.94,0,.61,.68,.44);box(M.coatDark,foxBody,0,.67,0,.69,.16,.46);box(M.cream,foxBody,0,1.05,.242,.085,.44,.025);
-const head=group(foxBody,0,1.5,.035);mesh(geo.sphere,M.fox,head,0,0,0,.35,.32,.29);const muzzle=mesh(geo.cone,M.fur,head,0,-.06,.33,.22,.37,.16);muzzle.rotation.x=Math.PI/2;
-mesh(geo.sphere,M.black,head,0,-.06,.49,.075,.055,.055);
-for(const x of [-.22,.22]){const ear=mesh(geo.cone,M.fox,head,x,.34,-.04,.16,.41,.12);ear.rotation.z=x<0?.18:-.18;mesh(geo.cone,M.dark,head,x,.35,.025,.08,.24,.04);mesh(geo.sphere,M.black,head,x*.7,.035,.265,.037,.046,.025);}
-const scarf=box(M.red,foxBody,0,1.25,.04,.53,.14,.51);const scarfTail=box(M.red,foxBody,-.15,1.01,-.28,.16,.49,.055);scarfTail.rotation.z=-.18;
-const tail=group(foxBody,0,.63,-.22);const tailFur=mesh(geo.sphere,M.fox,tail,0,-.08,-.39,.22,.24,.55);tailFur.rotation.x=-.35;mesh(geo.sphere,M.fur,tail,0,-.19,-.78,.16,.17,.22);
-const legs=[];for(const x of [-.18,.18]){const leg=group(fox,x,.6,0);box(M.boot,leg,0,-.25,0,.21,.5,.23);box(M.dark,leg,0,-.46,.075,.23,.15,.36);legs.push(leg);}
-const leftArm=group(foxBody,-.4,1.15,0);box(M.coatDark,leftArm,0,-.19,0,.18,.43,.22);mesh(geo.sphere,M.fur,leftArm,0,-.42,.02,.1,.11,.1);
-const swordArm=group(foxBody,.4,1.13,0);box(M.coat,swordArm,0,-.18,0,.19,.4,.23);mesh(geo.sphere,M.fur,swordArm,0,-.39,.04,.105,.1,.1);
-const sword=group(swordArm,0,-.4,.08);box(M.black,sword,0,0,.1,.11,.11,.32);box(M.paint,sword,0,0,.3,.32,.08,.09);box(M.cream,sword,0,0,.83,.12,.065,1.03);const swordTip=mesh(geo.cone,M.cream,sword,0,0,1.42,.084,.2,.04);swordTip.rotation.x=Math.PI/2;
-swordArm.rotation.x=-.5;
-const robotPaint=M.paint.clone();
-// Industrial robot: broad torso, pistons, single optic, oversized press hammer.
-const robot=group();const robotBody=group(robot,0,.05,0);
-const robotLegs=[];for(const x of [-.53,.53]){const leg=group(robot,x,1.05,0);cyl(M.metal,leg,0,-.2,0,.19,.7);box(robotPaint,leg,0,-.38,.1,.43,.52,.47);box(M.dark,leg,0,-.87,.22,.62,.25,.83);cyl(M.rust,leg,0,.04,0,.28,.24).rotation.z=Math.PI/2;robotLegs.push(leg);}
-box(M.metal,robotBody,0,1.25,0,1.35,.42,.76);box(robotPaint,robotBody,0,1.94,0,1.5,1.13,.92);box(M.rust,robotBody,0,1.38,.02,1.55,.19,.98);
-box(M.dark,robotBody,0,1.9,.48,1.1,.55,.09);for(let x=-.4;x<=.4;x+=.16)box(M.metal,robotBody,x,1.87,.55,.07,.35,.08);
-const robotHead=group(robotBody,0,2.67,.05);box(M.metal,robotHead,0,0,0,.91,.45,.68);box(M.dark,robotHead,0,.015,.37,.73,.22,.12);box(M.eye,robotHead,0,.015,.445,.41,.075,.04);box(robotPaint,robotHead,0,.28,-.05,1.07,.14,.84);
-for(const x of [-.85,.85]){const shoulder=cyl(M.rust,robotBody,x,2.3,0,.32,.27);shoulder.rotation.z=Math.PI/2;}
-const robotLeft=group(robotBody,-.96,2.28,0);box(M.metal,robotLeft,0,-.4,0,.28,.72,.33);box(robotPaint,robotLeft,0,-.84,.11,.42,.47,.43);for(const x of [-.13,.13])box(M.dark,robotLeft,x,-1.12,.2,.1,.26,.27);
-const hammerArm=group(robotBody,1,2.3,0);box(M.metal,hammerArm,0,-.37,0,.32,.7,.4);cyl(M.rust,hammerArm,0,-.71,0,.23,.3).rotation.z=Math.PI/2;box(M.metal,hammerArm,0,-.83,.42,.3,.29,.96);cyl(M.dark,hammerArm,0,-.83,1.05,.13,.3);const hammer=box(robotPaint,hammerArm,0,-.82,1.18,.9,.7,.7);box(M.rust,hammerArm,0,-1.19,1.18,1.05,.11,.82);for(let x=-.32;x<.4;x+=.2){const stripe=box(M.dark,hammerArm,x,-.82,1.54,.1,.56,.012);stripe.rotation.z=-.4;}
-for(const x of [-.37,.37]){const piston=cyl(M.cream,robotBody,x,2.2,-.54,.065,.8);piston.rotation.x=.23;}
-const serial=sign('ПР-7','1986',.55,.32,'#d0bd82','#9f8047');serial.position.set(-.36,2.24,.47);robotBody.add(serial);
-const vent=new THREE.PointLight('#bfe8ae',.6,3);vent.position.set(0,2.8,.5);robot.add(vent);
+const actors=createActors({materials:M,geometries:geo,makeSign:sign});
+const fox=actors.fox.root,robot=actors.robot.root,robotPaint=actors.robot.paint;scene.add(fox,robot);
+const foxAnimator=new ActorAnimator(actors.fox,'fox'),robotAnimator=new ActorAnimator(actors.robot,'robot');
 // Ground-space cues use the same sector shape and distances as collision checks.
 function sectorGeometry(inner,outer,half,segments=40){const verts=[];for(let i=0;i<segments;i++){const a=-half+i/segments*half*2,b=-half+(i+1)/segments*half*2;verts.push(Math.sin(a)*inner,0,Math.cos(a)*inner,Math.sin(a)*outer,0,Math.cos(a)*outer,Math.sin(b)*outer,0,Math.cos(b)*outer,Math.sin(a)*inner,0,Math.cos(a)*inner,Math.sin(b)*outer,0,Math.cos(b)*outer,Math.sin(b)*inner,0,Math.cos(b)*inner);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.computeVertexNormals();return g;}
 function cue(g,color,opacity){const o=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false}));o.position.y=.115;scene.add(o);return o;}
 const aimArc=cue(sectorGeometry(C.attackRange-.028,C.attackRange,C.attackHalfAngle),'#bfdab0',.45);
 const aimTick=cue(sectorGeometry(.59,1.02,.018),'#d4ecc4',.65);
-const swordArc=cue(sectorGeometry(.65,C.attackRange,C.attackHalfAngle),'#e7f6c5',0);
+const contactFX=new ContactEffects(scene,quality,geo,sectorGeometry);
 const warning=cue(sectorGeometry(.94,C.robotRange,C.robotHalfAngle),'#db7947',.17);
 const warningEdge=cue(sectorGeometry(C.robotRange-.05,C.robotRange,C.robotHalfAngle),'#ffb36c',.8);
 const robotRing=cue(new THREE.RingGeometry(1.02,1.055,60),'#d0a35c',.5);robotRing.rotation.x=-Math.PI/2;
 const cursor=new THREE.Group();const cursorMat=new THREE.MeshBasicMaterial({color:'#d3e0bb',transparent:true,opacity:.8});for(let i=0;i<4;i++){const t=new THREE.Mesh(new THREE.BoxGeometry(.1,.012,.025),cursorMat);t.position.set(Math.cos(i*Math.PI/2)*.19,0,Math.sin(i*Math.PI/2)*.19);t.rotation.y=i*Math.PI/2;cursor.add(t);}scene.add(cursor);
 const dustCount=quality.dustCount,dustPositions=new Float32Array(dustCount*3);for(let i=0;i<dustCount;i++){dustPositions[i*3]=(rand()-.5)*23;dustPositions[i*3+1]=.5+rand()*6;dustPositions[i*3+2]=(rand()-.5)*18;}const dustGeo=new THREE.BufferGeometry();dustGeo.setAttribute('position',new THREE.BufferAttribute(dustPositions,3));const dust=new THREE.Points(dustGeo,new THREE.PointsMaterial({color:'#d9d7a4',size:.035,transparent:true,opacity:.42,depthWrite:false}));scene.add(dust);
 
-let audio,muted=false;function sound(type){if(muted)return;try{audio??=new AudioContext();if(audio.state==='suspended')audio.resume();const now=audio.currentTime;const cfg={swing:[180,60,.12,.04,'triangle'],windup:[80,145,.65,.035,'sawtooth'],lock:[320,250,.08,.03,'square'],slam:[65,25,.32,.13,'triangle'],hit:[750,120,.13,.07,'square'],'player-hit':[130,40,.25,.11,'sawtooth'],dodge:[250,550,.09,.025,'sine'],win:[360,720,.6,.05,'sine']}[type];if(!cfg)return;const o=audio.createOscillator(),g=audio.createGain();o.type=cfg[4];o.frequency.setValueAtTime(cfg[0],now);o.frequency.exponentialRampToValueAtTime(cfg[1],now+cfg[2]);g.gain.setValueAtTime(cfg[3],now);g.gain.exponentialRampToValueAtTime(.001,now+cfg[2]);o.connect(g);g.connect(audio.destination);o.start();o.stop(now+cfg[2]);}catch{}}
-const particles=[],floaters=[];let shake=0,hitstop=0,robotFlash=0,playerFlash=0,outcomeTime=0;
-function burst(x,z,color,count=14,strength=1){count=Math.min(Math.ceil(count*(quality.low?.45:quality.touch?.7:1)),quality.particleLimit-particles.length);for(let i=0;i<count;i++){const o=mesh(geo.box,new THREE.MeshBasicMaterial({color,transparent:true}),scene,x,.7,z,.035+rand()*.06,.035,.035);particles.push({o,vx:(rand()-.5)*5*strength,vy:1+rand()*4*strength,vz:(rand()-.5)*5*strength,t:0,life:.25+rand()*.45});}}
+let audio,noiseBuffer,muted=false;
+function sound(type){
+  if(muted)return;
+  try{
+    audio??=new AudioContext();if(audio.state==='suspended')audio.resume();const now=audio.currentTime;
+    function tone(frequency,end,duration,volume,wave='sine'){
+      const oscillator=audio.createOscillator(),gain=audio.createGain();oscillator.type=wave;
+      oscillator.frequency.setValueAtTime(frequency,now);oscillator.frequency.exponentialRampToValueAtTime(end,now+duration);
+      gain.gain.setValueAtTime(volume,now);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+      oscillator.connect(gain);gain.connect(audio.destination);oscillator.start(now);oscillator.stop(now+duration);
+      oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
+    }
+    function noise(duration,volume,frequency,filterType='lowpass'){
+      if(!noiseBuffer){noiseBuffer=audio.createBuffer(1,Math.ceil(audio.sampleRate*.25),audio.sampleRate);const samples=noiseBuffer.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=Math.random()*2-1;}
+      const source=audio.createBufferSource(),filter=audio.createBiquadFilter(),gain=audio.createGain();source.buffer=noiseBuffer;filter.type=filterType;filter.frequency.value=frequency;
+      gain.gain.setValueAtTime(volume,now);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+      source.connect(filter);filter.connect(gain);gain.connect(audio.destination);source.start(now);source.stop(now+duration);
+      source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
+    }
+    if(type==='hit'){[920,1370,2170].forEach((f,i)=>tone(f,f*.83,.13+i*.025,.025/(i+1)));noise(.075,.045,2400,'bandpass');return;}
+    if(type==='slam'){tone(65,26,.25,.10,'triangle');tone(170,115,.17,.025);noise(.18,.09,480);return;}
+    if(type==='player-hit'){tone(95,38,.21,.07,'triangle');noise(.13,.065,1100);return;}
+    if(type==='swing'){noise(.11,.055,1700,'bandpass');return;}
+    const cfg={windup:[80,145,.65,.024,'sawtooth'],lock:[320,250,.08,.022,'square'],dodge:[250,550,.09,.022,'sine'],win:[360,720,.6,.045,'sine']}[type];
+    if(cfg)tone(...cfg);
+  }catch{/* Audio must never block combat. */}
+}
+const floaters=[];let shake=0,hitstop=0,robotFlash=0,playerFlash=0,outcomeTime=0,contactSource='',pendingSwoosh=false;
+const contactPoint=new THREE.Vector3();
 function floating(text,x,z,color,miss=false){const el=document.createElement('div');el.className='floating'+(miss?' miss':'');el.textContent=text;el.style.color=color;$('feedback').appendChild(el);floaters.push({el,x,z,t:0,life:miss?.7:.9});}
-function clearEffects(){for(const p of particles){scene.remove(p.o);p.o.material.dispose();}particles.length=0;for(const f of floaters)f.el.remove();floaters.length=0;robotFlash=playerFlash=shake=hitstop=outcomeTime=0;}
+function clearEffects(){contactFX.reset();for(const f of floaters)f.el.remove();floaters.length=0;robotFlash=playerFlash=shake=hitstop=outcomeTime=0;contactSource='';pendingSwoosh=false;}
 const game=new Combat((type,data)=>{
   if(type==='reset'){clearEffects();return;}
-  if(type==='robot-hit'){burst(data.x,data.z,data.vulnerable?'#dceba1':'#f7c475',18);floating('−'+data.damage,data.x,data.z,data.vulnerable?'#d8f2a6':'#f5d5a1');robotFlash=.16;shake=.06;hitstop=.055;sound('hit');}
-  else if(type==='player-hit'){burst(data.x,data.z,'#d18f64',14);floating('−34',data.x,data.z,'#f1a980');playerFlash=.2;shake=.14;hitstop=.085;sound(type);}
+  if(type==='robot-hit'){
+    const p=game.player,r=game.robot,dx=r.x-p.x,dz=r.z-p.z,length=Math.hypot(dx,dz)||1;
+    foxAnimator.aimStrike(wrap(Math.atan2(dx,dz)-p.attackAngle));
+    const tangent=p.attackAngle+foxAnimator.contactYaw;
+    robotAnimator.hit(dx/length*.8+Math.cos(tangent)*.35,dz/length*.8-Math.sin(tangent)*.35,data.vulnerable?.22:.16);
+    contactPoint.set(r.x-dx/length*C.robotRadius,1.28,r.z-dz/length*C.robotRadius);
+    contactFX.burst(contactPoint,data.vulnerable?'#f2e7b1':'#f7c475',data.vulnerable?16:11,1,{x:dx/length,z:dz/length});
+    floating('−'+data.damage,data.x,data.z,data.vulnerable?'#d8f2a6':'#f5d5a1');robotFlash=.13;shake=data.vulnerable?.055:.035;hitstop=.055;contactSource='sword';sound('hit');
+  }else if(type==='player-hit'){
+    const p=game.player,r=game.robot;foxAnimator.hit(p.x-r.x,p.z-r.z,.38);
+    contactPoint.set(p.x,.85,p.z);contactFX.burst(contactPoint,'#d6ba94',7,.65,{x:0,z:0},true);
+    floating('−34',data.x,data.z,'#f1a980');playerFlash=.18;shake=.12;hitstop=.085;contactSource='hammer';sound(type);
+  }else if(type==='swing'){
+    const p=game.player,r=game.robot;foxAnimator.aimStrike(sectorHits(p,p.attackAngle,C.attackRange,C.attackHalfAngle,r,C.robotRadius)?wrap(Math.atan2(r.x-p.x,r.z-p.z)-p.attackAngle):0);
+    contactFX.resetTrail();pendingSwoosh=true;
+  }
   else if(type==='miss')floating('ПРОМАХ',data.x,data.z,'#d0d1b5',true);
-  else if(type==='slam'){burst(data.x,data.z,'#d5ba84',24,1.4);shake=.12;sound(type);}
+  else if(type==='slam'){contactFX.slam(game.robot,game.robot.angle,contactPoint.set(data.x,GROUND_Y+.02,data.z));shake=.10;sound(type);}
   else if(type==='evade')floating('УКЛОНЕНИЕ',data.x,data.z,'#bce0c0',true);
-  else if(type==='win'||type==='lose'){outcomeTime=0;if(type==='win'){burst(game.robot.x,game.robot.z,'#e6b76d',32,1.5);sound('win');}updatePanels();}
+  else if(type==='win'||type==='lose'){outcomeTime=0;if(type==='win')sound('win');updatePanels();}
   else sound(type);
 });
+function resetActors(){foxAnimator.reset(game.player);robotAnimator.reset(game.robot);}
+resetActors();
 const keys=new Set();let attackPressed=false,dodgePressed=false;const mouse=new THREE.Vector2(.15,0),raycaster=new THREE.Raycaster(),groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0),aim=new THREE.Vector3(1,0,-1);
 const mobile=createMobileControls({root:$('touch-controls'),joystick:$('joystick'),knob:$('joystick-knob'),attack:$('touch-attack'),dodge:$('touch-dodge'),onActivity:()=>{setTouchMode(true);audio?.resume();}});
 function setTouchMode(value){touchMode=value;document.documentElement.classList.toggle('touch-mode',value);}
@@ -186,7 +208,7 @@ function updatePanels(){
   const done=game.mode==='won'||game.mode==='lost';$('result').classList.toggle('hidden',!done);$('pause').textContent=game.mode==='paused'?'>':'II';$('pause').setAttribute('aria-label',game.mode==='paused'?'Продолжить':'Пауза');
   if(done){const won=game.mode==='won';$('result-title').textContent=won?'Тишина.':'Ещё не конец.';$('result-eyebrow').textContent=won?'СМОТРИТЕЛЬ ОСТАНОВЛЕН':'ЛИС ПАЛ В СХВАТКЕ';$('result-copy').textContent=won?'В старом дворе снова слышен ветер.':'Дай роботу закончить замах. Атакуй, когда он восстанавливается.';$('result-stats').replaceChildren();for(const [v,label] of [[Math.round(game.elapsed)+' с','время'],[game.hits,'попаданий']]){const s=document.createElement('span'),b=document.createElement('b');b.textContent=v;s.append(b,document.createTextNode(label));$('result-stats').appendChild(s);}}
 }
-function start(){mobile.reset();keys.clear();attackPressed=dodgePressed=false;game.start();sound('dodge');updatePanels();}
+function start(){mobile.reset();keys.clear();attackPressed=dodgePressed=false;game.start();resetActors();sound('dodge');updatePanels();}
 function pause(){game.pause();mobile.reset();keys.clear();attackPressed=dodgePressed=false;updatePanels();}
 $('start').onclick=start;$('again').onclick=start;$('restart').onclick=start;$('resume').onclick=pause;$('pause').onclick=pause;
 $('sound').onclick=()=>{muted=!muted;$('sound').textContent=muted?'♩':'♪';$('sound').style.opacity=muted?'.45':'1';$('sound').setAttribute('aria-label',muted?'Включить звук':'Выключить звук');if(!muted)sound('dodge');};
@@ -229,38 +251,36 @@ function frame(now){if(boot.failed)return;requestAnimationFrame(frame);const raw
  const attack=attackPressed||mobile.attackHeld;
  const angle=touchMode?assistedAim(p.angle,p,[r],dt,attack&&p.state==='idle'):Math.atan2(aim.x-p.x,aim.z-p.z);
  const input={x:screenRight.x*sx+screenUp.x*sy,z:screenRight.z*sx+screenUp.z*sy,angle,attack,dodge:dodgePressed};
- if(hitstop>0){hitstop=Math.max(0,hitstop-dt);accumulator=0;}else{accumulator+=dt;let first=true;while(accumulator>=step){game.update(step,{...input,attack:first&&attack,dodge:first&&dodgePressed});if(first){attackPressed=false;dodgePressed=false;}first=false;accumulator-=step;}}
- const active=game.mode==='playing',moving=active&&(sx||sy),stride=visualTime*13;
- fox.position.set(p.x,0,p.z);fox.rotation.y=p.angle;foxBody.position.y=moving?.035*Math.sin(stride*2):Math.sin(visualTime*2)*.012;
- foxBody.rotation.x=p.state==='dodge'?-Math.sin(p.t/C.dodgeDuration*Math.PI)*.65:0;foxBody.rotation.z=0;
- legs.forEach((leg,i)=>leg.rotation.x=moving?Math.sin(stride+i*Math.PI)*.55:0);leftArm.rotation.x=moving?Math.sin(stride)*.2:0;tail.rotation.y=Math.sin(visualTime*3)*.14;scarfTail.rotation.x=Math.sin(visualTime*4)*.12;
- if(p.state==='attack'){const t=p.t;const swing=t<.16?-.7*(t/.16):t<.28?-.7+2.6*(t-.16)/.12:1.9*(1-(t-.28)/.34);swordArm.rotation.y=swing;swordArm.rotation.x=-.9;foxBody.rotation.y=swing*.1;}else{swordArm.rotation.y=.25;swordArm.rotation.x=-.45;foxBody.rotation.y=0;}
- if(p.state==='dead'){fox.rotation.z=THREE.MathUtils.lerp(fox.rotation.z,-1.4,dt*4);fox.position.y=-.05;}else fox.rotation.z=0;
- fox.visible=!(p.inv>0&&Math.floor(p.inv*16)%2===0&&playerFlash<=0);
- robot.position.set(r.x,0,r.z);robot.rotation.y=r.angle;
- const stepping=active&&r.state==='approach'&&dist(p,r)>2.75;robotLegs.forEach((leg,i)=>leg.rotation.x=stepping?Math.sin(visualTime*6+i*Math.PI)*.22:0);
- robotBody.position.y=.05+(stepping?Math.abs(Math.sin(visualTime*6))*.045:Math.sin(visualTime*1.5)*.012);
- let hammerLift=0,lean=0;
- if(r.state==='windup'){const progress=Math.min(1,r.t/C.robotWindup);hammerLift=-2.2*THREE.MathUtils.smoothstep(progress,0,.7);lean=-progress*.08;robotBody.rotation.z=Math.sin(visualTime*35)*.012*progress;}
- else if(r.state==='strike'){hammerLift=-2.2+3.15*Math.min(1,r.t/.1);lean=.1;robotBody.rotation.z=0;}
- else if(r.state==='recover'){hammerLift=.95*(1-THREE.MathUtils.smoothstep(r.t,1.2,1.8));lean=.1*(1-r.t/C.robotRecovery);robotBody.rotation.z=0;}
- else {robotBody.rotation.z=0;}
- hammerArm.rotation.x=hammerLift;robotBody.rotation.x=lean;robotLeft.rotation.x=r.state==='windup'?-.25:0;
- if(r.state==='dead'){outcomeTime+=dt;robotBody.rotation.z=Math.min(1.25,outcomeTime*1.4);robotBody.position.y=-Math.min(.7,outcomeTime*.7);hammerArm.rotation.x=1;M.eye.emissiveIntensity=.05;}else{M.eye.emissiveIntensity=r.state==='windup'?2+Math.sin(visualTime*20):1.5;}
- if(game.mode==='lost')outcomeTime+=dt;
+ const beforeTime=game.time;
+ const frozen=Math.min(hitstop,dt);hitstop=Math.max(0,hitstop-frozen);accumulator+=dt-frozen;
+ let first=true;
+ while(accumulator>=step){
+   game.update(step,{...input,attack:first&&attack,dodge:first&&dodgePressed});
+   if(first){attackPressed=false;dodgePressed=false;}first=false;accumulator-=step;
+   // Render the exact contact state; do not simulate through the newly emitted hitstop.
+   if(hitstop>0){accumulator=0;break;}
+ }
+ const simDt=game.time-beforeTime,active=game.mode==='playing';
+ if(game.mode==='won'||game.mode==='lost')outcomeTime+=dt;
+ const poseOptions={dt:simDt,clock:game.time,deathAge:outcomeTime,advanceRecoil:hitstop<=0};
+ foxAnimator.update(p,{...poseOptions,contactHold:hitstop>0&&contactSource==='sword'});
+ robotAnimator.update(r,poseOptions);
+ fox.visible=true;
+ if(pendingSwoosh&&p.state==='attack'&&p.t>=.11){sound('swing');pendingSwoosh=false;}
+ M.eye.emissiveIntensity=r.state==='dead'?.05:r.state==='windup'?1.8:1.5;
  robotFlash=Math.max(0,robotFlash-dt);playerFlash=Math.max(0,playerFlash-dt);robotPaint.emissive.set(robotFlash>0?'#c6ad72':'#000000');robotPaint.emissiveIntensity=robotFlash>0?.7:0;M.coat.emissive.set(playerFlash>0?'#d7b295':'#000000');M.coat.emissiveIntensity=playerFlash>0?.8:0;
  pShadow.position.x=p.x;pShadow.position.z=p.z;rShadow.position.x=r.x;rShadow.position.z=r.z;
- for(const o of [aimArc,aimTick,swordArc]){o.position.x=p.x;o.position.z=p.z;o.rotation.y=p.angle;o.visible=active;}
- aimArc.material.opacity=p.state==='attack'?.2:.36;const swingActive=p.state==='attack'&&p.t>=.13&&p.t<.34;swordArc.material.opacity=swingActive?Math.max(0,.3*(1-(p.t-.13)/.21)):0;
+ for(const o of [aimArc,aimTick]){o.position.x=p.x;o.position.z=p.z;o.rotation.y=p.angle;o.visible=active;}
+ aimArc.material.opacity=p.state==='attack'?.2:.36;
  const telegraph=active&&(r.state==='windup'||r.state==='strike');
  for(const o of [warning,warningEdge]){o.visible=telegraph;o.position.x=r.x;o.position.z=r.z;o.rotation.y=r.angle;}
  warning.material.opacity=r.state==='strike'?.5:.09+.14*Math.min(1,r.t/C.robotWindup);warningEdge.material.opacity=r.state==='strike'?.95:r.locked?.65+Math.sin(visualTime*20)*.2:.42;warning.material.color.set(r.locked?'#e99551':'#ce9959');
  robotRing.position.x=r.x;robotRing.position.z=r.z;robotRing.visible=r.hp>0;robotRing.material.color.set(r.state==='recover'?'#b6e299':'#c79c5b');robotRing.material.opacity=r.state==='recover'?.8:.32;
  cursor.position.set(aim.x,.12,aim.z);cursor.visible=active&&!touchMode&&Math.abs(aim.x)<9&&Math.abs(aim.z)<7;
- for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.t+=dt;q.o.position.x+=q.vx*dt;q.o.position.z+=q.vz*dt;q.o.position.y+=q.vy*dt;q.vy-=11*dt;q.o.rotation.x+=dt*6;q.o.rotation.z+=dt*4;q.o.material.opacity=1-q.t/q.life;if(q.t>=q.life){scene.remove(q.o);q.o.material.dispose();particles.splice(i,1);}}
+ contactFX.update(game.mode==='paused'?0:dt,{fox:actors.fox,player:p,clock:game.time});
  for(let i=floaters.length-1;i>=0;i--){const f=floaters[i];f.t+=dt;const s=project(f.x,2+f.t*.7,f.z);f.el.style.left=s.x+'px';f.el.style.top=s.y+'px';f.el.style.opacity=Math.min(1,(f.life-f.t)*3);if(f.t>=f.life){f.el.remove();floaters.splice(i,1);}}
  for(let i=0;i<dustCount;i++){dustPositions[i*3]+=.07*dt;dustPositions[i*3+1]+=.025*dt;if(dustPositions[i*3]>12)dustPositions[i*3]=-12;}dustGeo.attributes.position.needsUpdate=true;
- shake=Math.max(0,shake-dt*.6);camera.position.copy(cameraBase);if(shake>0&&active){camera.position.x+=(Math.random()-.5)*shake;camera.position.y+=(Math.random()-.5)*shake;}camera.lookAt(cameraTarget);
+ shake*=Math.exp(-dt*16);camera.position.copy(cameraBase);if(shake>.002&&active){camera.position.x+=Math.sin(visualTime*76)*shake*.6;camera.position.y+=Math.sin(visualTime*91)*shake*.4;}camera.lookAt(cameraTarget);
  hudTimer+=dt;if(hudTimer>.07){syncHUD();hudTimer=0;}
  if(!boot.report.ready)boot.setStage('first-frame');
  renderer.render(scene,camera);
@@ -269,3 +289,8 @@ function frame(now){if(boot.failed)return;requestAnimationFrame(frame);const raw
 requestAnimationFrame(frame);
 // Read-only observability for QA; gameplay remains driven by regular mouse/keyboard events.
 window.__combatSnapshot=()=>({mode:game.mode,player:{...game.player},robot:{...game.robot},hits:game.hits,misses:game.misses,dodges:game.dodges,elapsed:game.elapsed,mobile:{touchMode,movement:{...mobile.movement},attackHeld:mobile.attackHeld},quality:{pixelRatio:renderer.getPixelRatio(),shadows:renderer.shadowMap.enabled},drawCalls:renderer.info.render.calls});
+
+window.__animationSnapshot=()=>{
+ const position=node=>node.getWorldPosition(new THREE.Vector3()).toArray();
+ return {clock:game.time,hitstop,contactSource,fox:{pelvis:position(actors.fox.pelvis),chestYaw:actors.fox.chest.rotation.y,hand:position(actors.fox.right.hand),shoulder:position(actors.fox.right.upper),tip:position(actors.fox.tip),feet:actors.fox.legs.map(l=>position(l.hand)),reaction:{...foxAnimator.reaction}},robot:{pelvis:position(actors.robot.pelvis),chestPitch:actors.robot.chest.rotation.x,chestRoll:actors.robot.chest.rotation.z,head:position(actors.robot.hammerHead),sole:position(actors.robot.sole),reaction:{...robotAnimator.reaction}},screen:{foxGround:project(game.player.x,0,game.player.z),robotGround:project(game.robot.x,0,game.robot.z),fox:project(game.player.x,1,game.player.z),robot:project(game.robot.x,1.8,game.robot.z)},axes:{right:{x:screenRight.x,z:screenRight.z},up:{x:screenUp.x,z:screenUp.z}}};
+};
