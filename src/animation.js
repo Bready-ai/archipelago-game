@@ -27,7 +27,7 @@ const ROBOT_GUARD={pelvis:[0,1.17,0],hipYaw:0,chestYaw:0,chestPitch:.025,chestRo
 const robotPose=extra=>({...ROBOT_GUARD,...extra});
 // Head targets and shaft pitch are authored together: the wrist stays inside the
 // arm's reach while the head clears the right shoulder before crossing overhead.
-const ROBOT_IMPACT=robotPose({pelvis:[-.025,1.04,.12],hipYaw:.035,chestYaw:.04,chestPitch:.28,chestRoll:-.035,headPitch:-.13,hammerHead:[0,GROUND_Y+HAMMER_SOLE,2.4],hammerPitch:.55,headTilt:0,leftHand:[1.05,1.45,.6]});
+const ROBOT_IMPACT=robotPose({pelvis:[-.025,1.04,.12],hipYaw:.035,chestYaw:.04,chestPitch:.28,chestRoll:-.035,headPitch:-.13,hammerHead:[0,GROUND_Y+HAMMER_SOLE,2.4],hammerPitch:.65,headTilt:0,leftHand:[1.05,1.45,.6]});
 const ROBOT_APEX=robotPose({pelvis:[-.055,1.14,-.055],hipYaw:-.07,chestYaw:-.10,chestPitch:-.12,chestRoll:.025,headPitch:.08,hammerHead:[0,4,.03],hammerPitch:-.80,headTilt:-.45,leftHand:[.9,1.86,.62]});
 const ROBOT_WINDUP=[
   [0,ROBOT_GUARD],
@@ -39,7 +39,7 @@ const ROBOT_WINDUP=[
 ];
 const ROBOT_RECOVERY=[
   [0,ROBOT_IMPACT],
-  [.18,robotPose({...ROBOT_IMPACT,pelvis:[-.04,1.055,.10],chestPitch:.25})],
+  [.18,robotPose({...ROBOT_IMPACT,pelvis:[-.04,1.055,.15],chestPitch:.25})],
   // Break the head free slowly, then draw it back outside the body.
   [.66,robotPose({pelvis:[-.065,1.08,.04],hipYaw:-.06,chestYaw:-.09,chestPitch:.16,chestRoll:.035,headPitch:-.08,hammerHead:[-1.12,.78,2.03],hammerPitch:.36,headTilt:0,leftHand:[.98,1.42,.47]})],
   [1.28,robotPose({pelvis:[-.045,1.13,-.025],chestYaw:-.06,chestPitch:.08,hammerHead:[-1.05,1.18,1.48],hammerPitch:.26,headTilt:.08})],
@@ -59,7 +59,7 @@ export function sampleRobotPose(state,t){
   if(state==='windup'&&t>.94){
     const u=clamp((t-.94)/(C.robotWindup-.94))**2,v=1-u;
     // An overhead arc accelerates forward, then down into the existing impact instant.
-    pose.hammerPitch=mix(ROBOT_APEX.hammerPitch,ROBOT_IMPACT.hammerPitch,1-(1-u)**2);
+    pose.hammerPitch=mix(ROBOT_APEX.hammerPitch,ROBOT_IMPACT.hammerPitch,smooth(u));
     const points=[[0,4,.03],[0,4,1.20],[0,2.0,2.7],[0,GROUND_Y+HAMMER_SOLE,2.4]];
     pose.hammerHead=[0,1,2].map(i=>v**3*points[0][i]+3*v*v*u*points[1][i]+3*v*u*u*points[2][i]+u**3*points[3][i]);
   }

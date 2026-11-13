@@ -116,3 +116,15 @@ test('PR-7 plants its feet after aiming and holds them through contact and loade
   rig.legs.forEach((l,j)=>assert.ok(point(l.hand).distanceTo(end[j])<1e-6,'recovery foot pop'));
  }
 });
+
+test('PR-7 keeps the hammer on its authored path even when hit during the heavy attack',()=>{
+ for(const angle of [0,Math.PI/2,Math.PI,-Math.PI/2])for(const [x,z] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const {rig,anim}=setup('robot');
+  for(const [state,duration] of [['windup',C.robotWindup],['strike',C.robotActive],['recover',C.robotRecovery]])for(let t=0;t<duration;t+=.02){
+   // Peak recovery-hit reaction is stronger than an ordinary hit in windup.
+   anim.hit(x,z,.22);anim.reaction.age=.065;anim.update({x:2,z:-3,angle,state,t});
+   const expected=sampleRobotPose(state,t).hammerHead;
+   assert.ok(local(rig,rig.hammerHead).distanceTo(new THREE.Vector3(...expected))<1e-6,`${state} ${t}: recoil clips IK reach`);
+  }
+ }
+});
