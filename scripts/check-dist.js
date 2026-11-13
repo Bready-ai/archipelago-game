@@ -15,7 +15,7 @@ for (const [, url] of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
 for (const name of await readdir(path.join(dist, 'assets'))) {
   if (!name.endsWith('.css') && !name.endsWith('.js')) continue;
   const source = await readFile(path.join(dist, 'assets', name), 'utf8');
-  const urls = name.endsWith('.css') ? [...source.matchAll(/url\(["']?([^\s"')]+)["']?\)/g)] : [...source.matchAll(/(?:from|import)\s*["'](\.\/?[^"']+)["']/g)];
+  const urls = name.endsWith('.css') ? [...source.matchAll(/url\(["']?([^\s"')]+)["']?\)/g)] : [...source.matchAll(/(?:from\s*|import\s*\(?\s*)["'](\.\/[^"']+)["']/g)];
   for (const [, url] of urls) {
     if (/^(?:https?:|data:)/.test(url)) continue;
     const file = url.startsWith(base) ? path.join(dist, url.slice(base.length)) : path.resolve(dist, 'assets', url);

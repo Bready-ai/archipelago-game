@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Combat, C, dist } from './combat.js';
 import { createMobileControls, assistedAim } from './mobile-controls.js';
 import { chooseQuality, renderRatio } from './quality.js';
+import { createGameRenderer } from './renderer.js';
 import '@fontsource-variable/manrope';
 import '@fontsource/russo-one/cyrillic-400.css';
 import '@fontsource/russo-one/latin-400.css';
@@ -10,16 +11,22 @@ import './style.css';
 const $=id=>document.getElementById(id);
 const ui={playerHp:$('player-hp'),robotHp:$('robot-hp'),playerFill:$('player-fill'),robotFill:$('robot-fill'),robotState:$('robot-state'),dodgeText:$('dodge-text'),dodgeDot:$('dodge-dot'),hintTitle:$('hint-title'),hintText:$('hint-text'),label:$('world-label')};
 const coarseInput=matchMedia('(pointer: coarse)');
-let touchMode=coarseInput.matches;
+let touchMode=coarseInput.matches||navigator.maxTouchPoints>0;
 const quality=chooseQuality({touch:touchMode,memory:navigator.deviceMemory||8,cores:navigator.hardwareConcurrency||8});
 let resolutionScale=1,qualityWindow=0,qualityFrames=0,qualityCooldown=6;
 document.documentElement.classList.toggle('touch-mode',touchMode);
-let renderer;
-try {
-  renderer=new THREE.WebGLRenderer({antialias:!touchMode,powerPreference:'high-performance'});
-} catch(error) {
-  $('fatal').classList.remove('hidden');$('fatal').textContent='Для этой сцены нужен WebGL. Откройте её в актуальном Chrome, Firefox или Edge с включённым аппаратным ускорением.';throw error;
-}
+const boot=window.__pustoshBoot;
+boot.report.threeRevision=THREE.REVISION;
+const renderer=createGameRenderer({WebGLRenderer:THREE.WebGLRenderer,createCanvas:()=>document.createElement('canvas'),touch:touchMode,diagnostics:boot});
+boot.setStage('scene-setup');
+renderer.debug.onShaderError=(gl,program,vertex,fragment)=>{
+  const details={program:gl.getProgramInfoLog(program),vertex:gl.getShaderInfoLog(vertex),fragment:gl.getShaderInfoLog(fragment)};
+  boot.fail(new Error('Ошибка компиляции шейдеров: '+JSON.stringify(details)),{phase:'shader-compilation'});
+};
+renderer.domElement.addEventListener('webglcontextlost',event=>{
+  event.preventDefault();boot.fail(new Error(event.statusMessage||'Событие webglcontextlost: драйвер потерял созданный WebGL 2-контекст.'),{phase:'context-lost'});
+});
+$('build-id').textContent='Сборка '+boot.report.build;
 renderer.setPixelRatio(renderRatio(quality,innerWidth,innerHeight,devicePixelRatio));
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.32;
@@ -205,7 +212,8 @@ function syncHUD(){const p=game.player,r=game.robot;ui.playerHp.innerHTML=p.hp+'
  ui.label.classList.toggle('hidden',r.state!=='recover'||game.mode!=='playing');if(r.state==='recover'){const s=project(r.x,3.45,r.z);ui.label.style.left=s.x+'px';ui.label.style.top=s.y+'px';ui.label.textContent='УЯЗВИМ · '+Math.max(0,C.robotRecovery-r.t).toFixed(1)+' с';}
 }
 let last=performance.now(),accumulator=0,visualTime=0,hudTimer=0;const step=1/120;
-function frame(now){requestAnimationFrame(frame);const rawDt=(now-last)/1000,dt=Math.min(rawDt,.1);last=now;visualTime+=dt;
+window.addEventListener('pustosh:fatal',()=>{if(game.mode==='playing')pause();});
+function frame(now){if(boot.failed)return;requestAnimationFrame(frame);const rawDt=(now-last)/1000,dt=Math.min(rawDt,.1);last=now;visualTime+=dt;
  if(game.mode==='playing'&&!document.hidden&&rawDt<.2){qualityWindow+=rawDt;qualityFrames++;qualityCooldown-=rawDt;
   if(qualityWindow>=3){const fps=qualityFrames/qualityWindow;
    if(fps<38&&qualityCooldown<=0&&resolutionScale>.6){resolutionScale=Math.max(.6,resolutionScale-.2);renderer.setPixelRatio(renderRatio(quality,innerWidth,innerHeight,devicePixelRatio,resolutionScale));qualityCooldown=5;}
@@ -254,8 +262,10 @@ function frame(now){requestAnimationFrame(frame);const rawDt=(now-last)/1000,dt=
  for(let i=0;i<dustCount;i++){dustPositions[i*3]+=.07*dt;dustPositions[i*3+1]+=.025*dt;if(dustPositions[i*3]>12)dustPositions[i*3]=-12;}dustGeo.attributes.position.needsUpdate=true;
  shake=Math.max(0,shake-dt*.6);camera.position.copy(cameraBase);if(shake>0&&active){camera.position.x+=(Math.random()-.5)*shake;camera.position.y+=(Math.random()-.5)*shake;}camera.lookAt(cameraTarget);
  hudTimer+=dt;if(hudTimer>.07){syncHUD();hudTimer=0;}
+ if(!boot.report.ready)boot.setStage('first-frame');
  renderer.render(scene,camera);
+ if(!boot.report.ready)boot.markReady();
 }
 requestAnimationFrame(frame);
 // Read-only observability for QA; gameplay remains driven by regular mouse/keyboard events.
-window.__combatSnapshot=()=>({mode:game.mode,player:{...game.player},robot:{...game.robot},hits:game.hits,misses:game.misses,elapsed:game.elapsed,mobile:{touchMode,movement:{...mobile.movement},attackHeld:mobile.attackHeld},quality:{pixelRatio:renderer.getPixelRatio(),shadows:renderer.shadowMap.enabled},drawCalls:renderer.info.render.calls});
+window.__combatSnapshot=()=>({mode:game.mode,player:{...game.player},robot:{...game.robot},hits:game.hits,misses:game.misses,dodges:game.dodges,elapsed:game.elapsed,mobile:{touchMode,movement:{...mobile.movement},attackHeld:mobile.attackHeld},quality:{pixelRatio:renderer.getPixelRatio(),shadows:renderer.shadowMap.enabled},drawCalls:renderer.info.render.calls});
