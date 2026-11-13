@@ -3,12 +3,14 @@ name: Deploy game to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: github-pages
+  group: github-pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -36,6 +38,12 @@ jobs:
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
       - name: Check asset paths
         run: npm run check:dist
+        env:
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+      - name: Install Chromium for regression checks
+        run: npx playwright install --with-deps chromium
+      - name: Check production startup and recovery
+        run: npm run test:browser
         env:
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
       - name: Upload Pages artifact

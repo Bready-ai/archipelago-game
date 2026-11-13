@@ -5,7 +5,88 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#182522" />
     <meta name="description" content="Первая схватка в постъядерных руинах. Небольшой боевой прототип на Three.js." />
+    <meta name="game-build" content="__GAME_BUILD_ID__" />
     <title>ПУСТОШЬ — Первая схватка</title>
+    <style>
+      html #fatal{position:fixed;inset:0;z-index:1000;margin:0;padding:16px;display:grid;place-items:center;background:#13251ff7;color:#e6eddc;font:14px/1.5 Arial,sans-serif;overflow:auto;touch-action:pan-y}
+      html #fatal[hidden]{display:none!important}#fatal .diagnostic-panel{width:min(700px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:22px;border:1px solid #99b28b;background:#1c3026;touch-action:pan-y}
+      #fatal h2{margin:0 0 12px;font-size:22px}#fatal p{margin:10px 0}#diagnostic-phase{font-size:12px;color:#b8c9aa}#diagnostic-error{padding:12px;background:#10251c;white-space:pre-wrap;overflow-wrap:anywhere;color:#f3c69e}
+      #fatal button{min-height:44px;padding:10px 16px;margin:5px 8px 5px 0;border:1px solid #c2d1ad;border-radius:3px;background:#c2d1ad;color:#192b21;font:bold 13px Arial,sans-serif;touch-action:manipulation}
+      #fatal summary{cursor:pointer;padding:10px 0}#diagnostic-text{box-sizing:border-box;width:100%;height:220px;min-height:120px;padding:10px;font:12px/1.5 monospace;background:#10251c;color:#dce8d2;border:1px solid #76956c;user-select:text;-webkit-user-select:text;touch-action:pan-y}#diagnostic-copy-status{font-size:12px;color:#c1d7ab}
+    </style>
+    <script>(function () {
+  'use strict';
+  function serialize(error) {
+    return { name: error && error.name || 'Error', message: error && error.message || String(error),
+      stack: error && error.stack || '', cause: error && error.cause ? String(error.cause) : undefined };
+  }
+  var report = {
+    schema: 1, game: 'ПУСТОШЬ', build: document.querySelector('meta[name="game-build"]').content,
+    phase: 'bootstrap', ready: false, failure: null, attempts: [], context: null, events: [],
+    environment: { url: location.origin + location.pathname, userAgent: navigator.userAgent,
+      secureContext: window.isSecureContext, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio },
+      webgl2Interface: typeof WebGL2RenderingContext !== 'undefined', touchPoints: navigator.maxTouchPoints || 0 }
+  };
+  var failed = false;
+  function updateScreen() {
+    var root = document.getElementById('fatal');
+    if (!root) return;
+    root.hidden = false; root.classList.remove('hidden');
+    document.getElementById('diagnostic-error').textContent = report.failure.name + ': ' + report.failure.message;
+    document.getElementById('diagnostic-phase').textContent = 'Этап: ' + report.phase + ' · сборка ' + report.build;
+    document.getElementById('diagnostic-text').value = JSON.stringify(report, null, 2);
+    document.documentElement.style.touchAction = 'auto';
+    document.body.style.touchAction = 'auto';
+    document.getElementById('app').style.touchAction = 'auto';
+  }
+  var boot = window.__pustoshBoot = {
+    report: report,
+    get failed() { return failed; },
+    setStage: function (phase) { if (!failed) report.phase = phase; },
+    recordAttempt: function (attempt) { report.attempts.push(attempt); },
+    setContext: function (context) { report.context = context; },
+    fail: function (error, details) {
+      if (!failed) {
+        failed = true; report.failure = serialize(error);
+        if (details && details.phase) report.phase = details.phase;
+      }
+      if (report.events.length < 8) report.events.push({ time: new Date().toISOString(), details: details || {}, error: serialize(error) });
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', updateScreen, { once: true });
+      else updateScreen();
+      window.dispatchEvent(new CustomEvent('pustosh:fatal'));
+    },
+    markReady: function () { if (!failed) { report.ready = true; report.phase = 'running'; } }
+  };
+  window.addEventListener('error', function (event) {
+    var target = event.target;
+    if (target && target !== window && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+      var asset = (target.src || target.href || '').split(/[?#]/)[0];
+      boot.fail(new Error('Не удалось загрузить ресурс: ' + asset), { phase: 'asset-loading', asset: asset });
+    } else if (event.error || event.message) {
+      boot.fail(event.error || new Error(event.message), { filename: event.filename, line: event.lineno, column: event.colno });
+    }
+  }, true);
+  window.addEventListener('unhandledrejection', function (event) { boot.fail(event.reason); });
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('diagnostic-copy').addEventListener('click', async function () {
+      var field = document.getElementById('diagnostic-text');
+      var status = document.getElementById('diagnostic-copy-status');
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard API unavailable');
+        await navigator.clipboard.writeText(field.value);
+        status.textContent = 'Диагностика скопирована.';
+      } catch (error) {
+        document.getElementById('diagnostic-details').open = true;
+        field.focus(); field.select(); field.setSelectionRange(0, field.value.length);
+        try { status.textContent = document.execCommand('copy') ? 'Диагностика скопирована.' : 'Выделите и скопируйте текст из поля ниже.'; }
+        catch (copyError) { status.textContent = 'Выделите и скопируйте текст из поля ниже.'; }
+        document.getElementById('diagnostic-details').open = true;
+      }
+    });
+    document.getElementById('diagnostic-reload').addEventListener('click', function () { location.reload(); });
+  });
+}());
+</script>
   </head>
   <body>
     <main id="app">
@@ -46,7 +127,7 @@
         <button id="again" class="primary-btn">Ещё одна схватка <span>↻</span></button>
         <p class="start-note"><kbd>R</kbd> быстрый перезапуск</p>
       </section>
-      <section id="pause-panel" class="pause-panel hidden"><span class="eyebrow">СХВАТКА ПРИОСТАНОВЛЕНА</span><h1>Передышка.</h1><button id="resume" class="primary-btn">Продолжить <span>→</span></button><p class="start-note"><kbd>Esc</kbd> продолжить</p></section>
+      <section id="pause-panel" class="pause-panel hidden"><span class="eyebrow">СХВАТКА ПРИОСТАНОВЛЕНА</span><h1>Передышка.</h1><button id="resume" class="primary-btn">Продолжить <span>→</span></button><p class="start-note"><kbd>Esc</kbd> продолжить</p><p class="start-note" id="build-id"></p></section>
       <footer class="bottom-hud">
         <section class="player-hud"><div class="portrait"><span>◈</span></div><div class="player-vitals"><div class="vitals-heading"><b>ЛИС</b><span id="player-hp">100 <small>/ 100</small></span></div><div class="health-track player-health"><div id="player-fill"></div></div><div class="dodge-status"><span id="dodge-dot"></span><span id="dodge-text">Уклонение готово</span></div></div></section>
         <div class="controls"><div><span class="wasd"><kbd>W</kbd><span><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span></span><label>Движение</label></div><div><span class="mouse-icon"><i></i></span><label>Прицел / удар</label></div><div><kbd class="space-key">Space</kbd><label>Уклонение</label></div><div class="pause-control"><kbd>Esc</kbd><label>Пауза</label></div></div>
@@ -64,8 +145,19 @@
       </div>
       <p class="orientation-note">Для большего обзора поверните телефон</p>
       <div id="feedback" aria-live="polite"></div>
-      <div id="fatal" class="hidden"></div>
+      <section id="fatal" class="hidden" hidden role="alert" aria-live="assertive">
+        <div class="diagnostic-panel">
+          <h2>Не удалось запустить 3D-сцену</h2>
+          <p id="diagnostic-phase"></p>
+          <pre id="diagnostic-error"></pre>
+          <p>Скопируйте диагностику: она содержит исходную ошибку, параметры контекста и этап сбоя. Данные никуда не отправляются автоматически.</p>
+          <button id="diagnostic-copy" type="button">Копировать диагностику</button>
+          <button id="diagnostic-reload" type="button">Повторить запуск</button>
+          <p id="diagnostic-copy-status" role="status"></p>
+          <details id="diagnostic-details"><summary>Подробная диагностика</summary><textarea id="diagnostic-text" readonly aria-label="Диагностика запуска" spellcheck="false"></textarea></details>
+        </div>
+      </section>
     </main>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/bootstrap.js"></script>
   </body>
 </html>
