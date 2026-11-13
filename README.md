@@ -58,3 +58,18 @@ npm run preview
 до разгрузки молота. Головка поднимается снаружи плеча, проходит над головой и ускоряется
 по дуге к прежней точке `slam`. Кисть следует рукояти через двухзвенный IK; для прохода
 над головой плоскость локтя дополнительно стабилизирует вращение плеча.
+
+### Cloudflare Workers Preview
+
+`wrangler.jsonc` задаёт статические ресурсы `dist` и отдельный Preview без привязок
+к production-ресурсам. Версия Wrangler зафиксирована в devDependencies.
+В Cloudflare **Settings → Build** для веток предварительного просмотра:
+
+- Build command: `npm run build:cloudflare`
+- Preview / non-production deploy command: `npm run preview:cloudflare`
+
+В `wrangler preview` параметр `--assets` не поддерживается: каталог задаётся в
+конфигурации. Сборка Cloudflare использует `/` для ресурсов, GitHub Pages сохраняет
+свой прежний путь. Production deploy command и ветку `main` для проверки PR менять
+не требуется. После сохранения настроек повторите сборку ветки PR. Проверяйте
+выданный Cloudflare URL, загрузку WebGL и номер сборки перед тестированием на телефоне.
