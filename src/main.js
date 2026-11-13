@@ -5,6 +5,7 @@ import { chooseQuality, renderRatio } from './quality.js';
 import { createGameRenderer } from './renderer.js';
 import { createActors,GROUND_Y } from './actors.js';
 import { ActorAnimator } from './animation.js';
+import { createHammerDebug } from './hammer-debug.js';
 import { ContactEffects } from './contact-effects.js';
 import '@fontsource-variable/manrope';
 import '@fontsource/russo-one/cyrillic-400.css';
@@ -127,6 +128,7 @@ const pShadow=contact(.56,'#142e25',.27),rShadow=contact(1.15,'#142e25',.3);
 const actors=createActors({materials:M,geometries:geo,makeSign:sign});
 const fox=actors.fox.root,robot=actors.robot.root,robotPaint=actors.robot.paint;scene.add(fox,robot);
 const foxAnimator=new ActorAnimator(actors.fox,'fox'),robotAnimator=new ActorAnimator(actors.robot,'robot');
+const hammerDebug=createHammerDebug(scene,actors.robot);
 // Ground-space cues use the same sector shape and distances as collision checks.
 function sectorGeometry(inner,outer,half,segments=40){const verts=[];for(let i=0;i<segments;i++){const a=-half+i/segments*half*2,b=-half+(i+1)/segments*half*2;verts.push(Math.sin(a)*inner,0,Math.cos(a)*inner,Math.sin(a)*outer,0,Math.cos(a)*outer,Math.sin(b)*outer,0,Math.cos(b)*outer,Math.sin(a)*inner,0,Math.cos(a)*inner,Math.sin(b)*outer,0,Math.cos(b)*outer,Math.sin(b)*inner,0,Math.cos(b)*inner);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.computeVertexNormals();return g;}
 function cue(g,color,opacity){const o=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false}));o.position.y=.115;scene.add(o);return o;}
@@ -208,7 +210,7 @@ function updatePanels(){
   const done=game.mode==='won'||game.mode==='lost';$('result').classList.toggle('hidden',!done);$('pause').textContent=game.mode==='paused'?'>':'II';$('pause').setAttribute('aria-label',game.mode==='paused'?'Продолжить':'Пауза');
   if(done){const won=game.mode==='won';$('result-title').textContent=won?'Тишина.':'Ещё не конец.';$('result-eyebrow').textContent=won?'СМОТРИТЕЛЬ ОСТАНОВЛЕН':'ЛИС ПАЛ В СХВАТКЕ';$('result-copy').textContent=won?'В старом дворе снова слышен ветер.':'Дай роботу закончить замах. Атакуй, когда он восстанавливается.';$('result-stats').replaceChildren();for(const [v,label] of [[Math.round(game.elapsed)+' с','время'],[game.hits,'попаданий']]){const s=document.createElement('span'),b=document.createElement('b');b.textContent=v;s.append(b,document.createTextNode(label));$('result-stats').appendChild(s);}}
 }
-function start(){mobile.reset();keys.clear();attackPressed=dodgePressed=false;game.start();resetActors();sound('dodge');updatePanels();}
+function start(){if(hammerDebug)return;mobile.reset();keys.clear();attackPressed=dodgePressed=false;game.start();resetActors();sound('dodge');updatePanels();}
 function pause(){game.pause();mobile.reset();keys.clear();attackPressed=dodgePressed=false;updatePanels();}
 $('start').onclick=start;$('again').onclick=start;$('restart').onclick=start;$('resume').onclick=pause;$('pause').onclick=pause;
 $('sound').onclick=()=>{muted=!muted;$('sound').textContent=muted?'♩':'♪';$('sound').style.opacity=muted?'.45':'1';$('sound').setAttribute('aria-label',muted?'Включить звук':'Выключить звук');if(!muted)sound('dodge');};
@@ -254,6 +256,7 @@ function frame(now){if(boot.failed)return;requestAnimationFrame(frame);const raw
  const beforeTime=game.time;
  const frozen=Math.min(hitstop,dt);hitstop=Math.max(0,hitstop-frozen);accumulator+=dt-frozen;
  let first=true;
+ if(hammerDebug)accumulator=0;
  while(accumulator>=step){
    game.update(step,{...input,attack:first&&attack,dodge:first&&dodgePressed});
    if(first){attackPressed=false;dodgePressed=false;}first=false;accumulator-=step;
@@ -264,8 +267,8 @@ function frame(now){if(boot.failed)return;requestAnimationFrame(frame);const raw
  if(game.mode==='won'||game.mode==='lost')outcomeTime+=dt;
  const poseOptions={dt:simDt,clock:game.time,deathAge:outcomeTime,advanceRecoil:hitstop<=0};
  foxAnimator.update(p,{...poseOptions,contactHold:hitstop>0&&contactSource==='sword'});
- robotAnimator.update(r,poseOptions);
- fox.visible=true;
+ if(hammerDebug)hammerDebug.update(game.mode==='paused'?0:dt);else robotAnimator.update(r,poseOptions);
+ fox.visible=!hammerDebug;
  if(pendingSwoosh&&p.state==='attack'&&p.t>=.11){sound('swing');pendingSwoosh=false;}
  M.eye.emissiveIntensity=r.state==='dead'?.05:r.state==='windup'?1.8:1.5;
  robotFlash=Math.max(0,robotFlash-dt);playerFlash=Math.max(0,playerFlash-dt);robotPaint.emissive.set(robotFlash>0?'#c6ad72':'#000000');robotPaint.emissiveIntensity=robotFlash>0?.7:0;M.coat.emissive.set(playerFlash>0?'#d7b295':'#000000');M.coat.emissiveIntensity=playerFlash>0?.8:0;
@@ -283,6 +286,7 @@ function frame(now){if(boot.failed)return;requestAnimationFrame(frame);const raw
  shake*=Math.exp(-dt*16);camera.position.copy(cameraBase);if(shake>.002&&active){camera.position.x+=Math.sin(visualTime*76)*shake*.6;camera.position.y+=Math.sin(visualTime*91)*shake*.4;}camera.lookAt(cameraTarget);
  hudTimer+=dt;if(hudTimer>.07){syncHUD();hudTimer=0;}
  if(!boot.report.ready)boot.setStage('first-frame');
+ if(hammerDebug){warning.visible=warningEdge.visible=robotRing.visible=rShadow.visible=pShadow.visible=cursor.visible=false;}
  renderer.render(scene,camera);
  if(!boot.report.ready)boot.markReady();
 }
@@ -292,5 +296,5 @@ window.__combatSnapshot=()=>({mode:game.mode,player:{...game.player},robot:{...g
 
 window.__animationSnapshot=()=>{
  const position=node=>node.getWorldPosition(new THREE.Vector3()).toArray();
- return {clock:game.time,hitstop,contactSource,fox:{pelvis:position(actors.fox.pelvis),chestYaw:actors.fox.chest.rotation.y,hand:position(actors.fox.right.hand),shoulder:position(actors.fox.right.upper),tip:position(actors.fox.tip),feet:actors.fox.legs.map(l=>position(l.hand)),reaction:{...foxAnimator.reaction}},robot:{pelvis:position(actors.robot.pelvis),chestPitch:actors.robot.chest.rotation.x,chestRoll:actors.robot.chest.rotation.z,head:position(actors.robot.hammerHead),sole:position(actors.robot.sole),reaction:{...robotAnimator.reaction}},screen:{foxGround:project(game.player.x,0,game.player.z),robotGround:project(game.robot.x,0,game.robot.z),fox:project(game.player.x,1,game.player.z),robot:project(game.robot.x,1.8,game.robot.z)},axes:{right:{x:screenRight.x,z:screenRight.z},up:{x:screenUp.x,z:screenUp.z}}};
+ return {debug:hammerDebug?.snapshot()??null,clock:game.time,hitstop,contactSource,fox:{pelvis:position(actors.fox.pelvis),chestYaw:actors.fox.chest.rotation.y,hand:position(actors.fox.right.hand),shoulder:position(actors.fox.right.upper),tip:position(actors.fox.tip),feet:actors.fox.legs.map(l=>position(l.hand)),reaction:{...foxAnimator.reaction}},robot:{pelvis:position(actors.robot.pelvis),chestPitch:actors.robot.chest.rotation.x,chestRoll:actors.robot.chest.rotation.z,head:position(actors.robot.hammerHead),sole:position(actors.robot.sole),hand:position(actors.robot.right.hand),feet:actors.robot.legs.map(l=>position(l.hand)),reaction:{...robotAnimator.reaction}},screen:{foxGround:project(game.player.x,0,game.player.z),robotGround:project(game.robot.x,0,game.robot.z),fox:project(game.player.x,1,game.player.z),robot:project(game.robot.x,1.8,game.robot.z)},axes:{right:{x:screenRight.x,z:screenRight.z},up:{x:screenUp.x,z:screenUp.z}}};
 };
