@@ -94,3 +94,32 @@ test('consecutive hammer impacts stay on the ground after movement and turning',
   }
   expect(Math.max(...impacts)-Math.min(...impacts)).toBeGreaterThan(.12);
 });
+
+test('hammer rehearsal uses quarter speed, frozen combat and the game camera in four directions',async({page})=>{
+  test.setTimeout(120000);
+  await page.addInitScript(()=>Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>4}));
+  await page.clock.install({time:new Date('2026-01-01T00:00:00Z')});
+  await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
+  await page.goto('./?hammerDebug=1');
+  await expect.poll(()=>page.evaluate(()=>typeof window.__animationSnapshot)).toBe('function');
+  await page.clock.runFor(16);const before=await snapshot(page);
+  await page.clock.runFor(400);const after=await snapshot(page);
+  expect(after.pose.debug.time-before.pose.debug.time).toBeCloseTo(.1,2);
+  expect(after.combat.elapsed).toBe(0);expect(after.combat.mode).toBe('intro');
+  for(const [i,angle] of [0,Math.PI/2,Math.PI,-Math.PI/2].entries()){
+    await page.getByLabel('Направление робота').selectOption(String(angle));
+    for(const [name,t] of [['chamber',.2],['overhead',.88],['swing',1.09],['impact',C_ROBOT_WINDUP],['recovery',2.15]]){
+      await page.getByLabel('Фаза удара').evaluate((el,t)=>{el.value=t;el.dispatchEvent(new Event('input',{bubbles:true}));},t);
+      await page.clock.runFor(16);
+      const s=await snapshot(page);expect(s.pose.debug.playing).toBe(false);expect(s.pose.debug.angle).toBe(angle);
+      if(name==='impact'){expect(s.pose.robot.sole[1]).toBeCloseTo(.085,3);expect(Math.hypot(s.pose.robot.head[0],s.pose.robot.head[2])).toBeCloseTo(2.4,3);}
+      await capture(page,`pr7-${i}-${name}`);
+    }
+  }
+  await page.locator('[data-joints]').uncheck();await page.locator('[data-path]').uncheck();await page.clock.runFor(16);
+  const hidden=await snapshot(page);expect(hidden.pose.debug.joints).toBe(false);expect(hidden.pose.debug.path).toBe(false);
+  await page.getByRole('link',{name:/Вернуться в игру/}).click();await page.clock.runFor(16);
+  await expect.poll(()=>page.evaluate(()=>window.__animationSnapshot?.().debug)).toBe(null);
+  await expect(page.locator('#start')).toBeVisible();
+});
+const C_ROBOT_WINDUP=1.16;
