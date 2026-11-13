@@ -176,7 +176,7 @@ const screenRight=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);sc
 function updatePanels(){
   mobile.setEnabled(game.mode==='playing');
   $('briefing').classList.toggle('hidden',game.mode!=='intro');$('enemy-hud').classList.toggle('hidden',game.mode==='intro');$('pause-panel').classList.toggle('hidden',game.mode!=='paused');
-  const done=game.mode==='won'||game.mode==='lost';$('result').classList.toggle('hidden',!done);$('pause').textContent=game.mode==='paused'?'▶':'Ⅱ';$('pause').setAttribute('aria-label',game.mode==='paused'?'Продолжить':'Пауза');
+  const done=game.mode==='won'||game.mode==='lost';$('result').classList.toggle('hidden',!done);$('pause').textContent=game.mode==='paused'?'>':'II';$('pause').setAttribute('aria-label',game.mode==='paused'?'Продолжить':'Пауза');
   if(done){const won=game.mode==='won';$('result-title').textContent=won?'Тишина.':'Ещё не конец.';$('result-eyebrow').textContent=won?'СМОТРИТЕЛЬ ОСТАНОВЛЕН':'ЛИС ПАЛ В СХВАТКЕ';$('result-copy').textContent=won?'В старом дворе снова слышен ветер.':'Дай роботу закончить замах. Атакуй, когда он восстанавливается.';$('result-stats').replaceChildren();for(const [v,label] of [[Math.round(game.elapsed)+' с','время'],[game.hits,'попаданий']]){const s=document.createElement('span'),b=document.createElement('b');b.textContent=v;s.append(b,document.createTextNode(label));$('result-stats').appendChild(s);}}
 }
 function start(){mobile.reset();keys.clear();attackPressed=dodgePressed=false;game.start();sound('dodge');updatePanels();}
